@@ -25,9 +25,9 @@ jobs:
 
       - name: Build Disk Image
         id: build
-        working-directory: packer/windows
+        working-directory: terraform
         run: |
-              packer build windows.pkr.hcl
+             # Terraform windows.pkr.hcl
               # chmod +x ./build_windows_cmmc_image.sh
               # ./build_windows_cmmc_image.sh ${{ github.ref_name }}
 
