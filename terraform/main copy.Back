@@ -1,0 +1,133 @@
+terraform {
+  required_version = ">= 1.5.0"
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "google" {
+  project     = "kasm-3"
+  region      = "us-central1"
+  zone        = "us-central1-a"
+  credentials = "key.json"
+}
+
+# ---------------- Variables ----------------
+variable "project_id" {
+  description = "GCP project id"
+  type        = string
+  default     = "kasm-3"
+}
+
+variable "region" {
+  description = "GCP region"
+  type        = string
+  default     = "us-central1"
+}
+
+variable "zone" {
+  description = "GCP zone"
+  type        = string
+  default     = "us-central1-a"
+}
+
+variable "vm_name" {
+  description = "Windows VM name"
+  type        = string
+  default     = "windows-server-01"
+}
+
+variable "machine_type" {
+  description = "GCE machine type"
+  type        = string
+  default     = "n2-standard-4"
+}
+
+variable "windows_admin_password" {
+  description = "Local Administrator password"
+  type        = string
+  sensitive   = true
+}
+
+# ---------------- Network ----------------
+resource "google_compute_network" "vpc" {
+  name                    = "win-vpc"
+  auto_create_subnetworks = false
+}
+
+resource "google_compute_subnetwork" "subnet" {
+  name          = "win-subnet"
+  region        = var.region
+  network       = google_compute_network.vpc.id
+  ip_cidr_range = "10.10.0.0/24"
+}
+
+# Allow RDP (3389) - lock to your IP in production
+resource "google_compute_firewall" "allow_rdp" {
+  name    = "allow-rdp"
+  network = google_compute_network.vpc.name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["3389"]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+  target_tags   = ["rdp"]
+}
+
+# Optional: allow ICMP ping
+resource "google_compute_firewall" "allow_icmp" {
+  name    = "allow-icmp"
+  network = google_compute_network.vpc.name
+
+  allow {
+    protocol = "icmp"
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+}
+
+# ---------------- Static Public IP ----------------
+resource "google_compute_address" "public_ip" {
+  name   = "win-public-ip"
+  region = var.region
+}
+
+# ---------------- Windows VM ----------------
+resource "google_compute_instance" "windows" {
+  name         = var.vm_name
+  machine_type = var.machine_type
+  zone         = var.zone
+  tags         = ["rdp"]
+
+  boot_disk {
+    initialize_params {
+      # Windows Server 2022 Datacenter
+      image = "projects/windows-cloud/global/images/family/windows-2022"
+      size  = 60
+      type  = "pd-balanced"
+    }
+  }
+
+  network_interface {
+    subnetwork = google_compute_subnetwork.subnet.id
+    access_config {
+      nat_ip = google_compute_address.public_ip.address
+    }
+  }
+
+  # Set local Administrator password at first boot
+  metadata = {
+    windows-startup-script-ps1 = <<-EOT
+      net user ksam "${var.windows_admin_password}"
+    EOT
+  }
+}
+
+output "windows_public_ip" {
+  value = google_compute_address.public_ip.address
+}
