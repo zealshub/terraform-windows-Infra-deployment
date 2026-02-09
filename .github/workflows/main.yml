@@ -22,17 +22,7 @@ jobs:
 
       - name: Set project
         run: gcloud config set project kasm-485616
-
-      - name: Build Disk Image
-        id: build
-        working-directory: terraform
-        run: |
-             # Terraform windows.pkr.hcl
-              # chmod +x ./build_windows_cmmc_image.sh
-              # ./build_windows_cmmc_image.sh ${{ github.ref_name }}
-
-        
-
+     
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
